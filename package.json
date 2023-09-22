@@ -1,0 +1,26 @@
+{
+    "publisher": "billti",
+    "name": "vsmin",
+    "version": "0.1.0",
+    "displayName": "Minimal VS Code extension",
+    "type": "commonjs",
+    "engines": {
+        "vscode": "^1.82.0"
+    },
+    "categories": ["Other"],
+    "activationEvents": [],
+    "browser": "./src/extension.js",
+    "virtualWorkspaces": true,
+    "contributes": {
+        "commands": [
+            {
+                "command": "vsmin-cmd",
+                "title": "VS Min Command"
+            }
+        ]
+    },
+    "license": "MIT",
+    "devDependencies": {
+        "@types/vscode": "^1.82.0"
+    }
+}
