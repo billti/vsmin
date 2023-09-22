@@ -9,12 +9,12 @@
     },
     "categories": ["Other"],
     "activationEvents": [],
-    "browser": "./src/extension.js",
+    "browser": "./extension.js",
     "virtualWorkspaces": true,
     "contributes": {
         "commands": [
             {
-                "command": "vsmin-cmd",
+                "command": "vsmin.cmd",
                 "title": "VS Min Command"
             }
         ]

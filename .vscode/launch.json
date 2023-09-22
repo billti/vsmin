@@ -9,8 +9,8 @@
             "runtimeExecutable": "${execPath}",
             "args": [
                 "--disable-extensions",
-                "--extensionDevelopmentPath=${workspaceFolder}/ext",
-                "${workspaceFolder}/"
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "${workspaceFolder}"
             ]
         }
     ]
