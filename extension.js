@@ -32,15 +32,11 @@ class CircuitEditorProvider {
      * @param {vscode.CancellationToken} token 
      */
     async resolveCustomTextEditor(document, webviewPanel, token) {
-        function updateWebView() {
-            webviewPanel.webview.postMessage(
-                { type: 'update', value: document.getText() }
-            );
-        }
-
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {
-                updateWebView();
+                webviewPanel.webview.postMessage(
+                    { type: 'update', value: document.getText() }
+                );
             }
         });
 
@@ -72,7 +68,6 @@ class CircuitEditorProvider {
     <link href="${styleUri}" rel="stylesheet">
   </head>
   <body>
-    <h1>Hello from CircuitEditorProvider!</h1>
     <script src="${scriptUri}"></script>
   </body>
 </html>
