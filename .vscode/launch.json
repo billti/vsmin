@@ -10,7 +10,7 @@
             "args": [
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
-                "${workspaceFolder}"
+                "${workspaceFolder}/sample"
             ]
         }
     ]

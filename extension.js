@@ -1,21 +1,57 @@
-//@ts-check
+//@ts-check - see https://www.typescriptlang.org/docs/handbook/type-checking-javascript-files.html
 
-console.log("In first line of vs-min extension")
 var vscode = require('vscode');
 
 /**
  * @param {vscode.ExtensionContext} context 
  */
-async function activate(context) {
-    console.log('vs-min extension is active');
-
-    var disposable = vscode.commands.registerCommand('vsmin.cmd', function () {
+module.exports.activate = async function activate(context) {
+    const cmdDisposable = vscode.commands.registerCommand('vsmin.cmd', function () {
         vscode.window.showInformationMessage('Hello from extension vs-min!');
     });
 
-    context.subscriptions.push(disposable);
+    const providerDisposable = vscode.window.registerCustomEditorProvider('vsmin.circuitEditor',
+        new CircuitEditorProvider(context)
+    );
+
+    context.subscriptions.push(cmdDisposable, providerDisposable);
 }
 
-module.exports = {
-    activate
+/**
+ * @implements {vscode.CustomTextEditorProvider}
+ */
+class CircuitEditorProvider {
+    /** @param {vscode.ExtensionContext} context */
+    constructor(context) {
+        this.context = context;
+    }
+
+    /**
+     * @param {vscode.TextDocument} document 
+     * @param {vscode.WebviewPanel} webviewPanel 
+     * @param {vscode.CancellationToken} token 
+     */
+    async resolveCustomTextEditor(document, webviewPanel, token) {
+        webviewPanel.webview.options = {
+            enableScripts: true,
+        };
+        const scriptUri = webviewPanel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this.context.extensionUri, 'editor.js')
+        );
+        const styleUri = webviewPanel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this.context.extensionUri, 'style.css')
+        );
+        webviewPanel.webview.html = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <link href="${styleUri}" rel="stylesheet">
+  </head>
+  <body>
+    <h1>Hello from CircuitEditorProvider!</h1>
+    <script src="${scriptUri}"></script>
+  </body>
+</html>
+`;
+    }
 }

@@ -19,6 +19,17 @@
                 "command": "vsmin.cmd",
                 "title": "VS Min Command"
             }
+        ],
+        "customEditors": [
+            {
+                "viewType": "vsmin.circuitEditor",
+                "displayName": "Circuit",
+                "selector": [
+                    {
+                        "filenamePattern": "circuit.json"
+                    }
+                ]
+            }
         ]
     },
     "license": "MIT",
