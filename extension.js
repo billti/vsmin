@@ -32,6 +32,30 @@ class CircuitEditorProvider {
      * @param {vscode.CancellationToken} token 
      */
     async resolveCustomTextEditor(document, webviewPanel, token) {
+        function updateWebView() {
+            webviewPanel.webview.postMessage(
+                { type: 'update', value: document.getText() }
+            );
+        }
+
+        const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
+            if (e.document.uri.toString() === document.uri.toString()) {
+                updateWebView();
+            }
+        });
+
+        webviewPanel.onDidDispose(() => {
+            changeDocumentSubscription.dispose();
+        });
+
+        webviewPanel.webview.onDidReceiveMessage(e => {
+            if (e.type === 'add') {
+                const edit = new vscode.WorkspaceEdit();
+                edit.insert(document.uri, new vscode.Position(0, 0), 'Hello from editor.js!\n');
+                vscode.workspace.applyEdit(edit);
+            }
+        });
+
         webviewPanel.webview.options = {
             enableScripts: true,
         };
