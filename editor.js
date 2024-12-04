@@ -107,38 +107,24 @@ class CircuitGate extends CircuitElement {
         super('g', parent);
         const [rect, text] = createSvgElements('rect', 'text');
         rect.classList.value = 'circuit-gate';
+        text.classList.value = 'circuit-gate-text';
 
         if (name[0] === 'R') {
+            // Rotation gate
             text.innerHTML = `R<tspan dy="5" class="circuit-script">${name[1]}</tspan>`;
         } else if (name[1] === '†') {
+            // Adjoint gate
             text.innerHTML = `<tspan dx="3">${name[0]}</tspan><tspan dx="3" dy="-6" class="circuit-script">${name[1]}</tspan>`;
+        } else if (name[1] === '0') {
+            // Reset gate
+            text.textContent = name;
+            setAttributes(text, {'class': 'circuit-gate-text circuit-gate-reset'});
         } else {
             text.textContent = name;
         }
-        text.classList.value = 'circuit-gate-text';
 
         appendChildren(this.domNode, [rect, text]);
         this.domNode.style.transform = `translate(${x}px, ${y}px)`;
-    }
-}
-
-class CircuitReset extends CircuitElement {
-    /**
-     * @param {number} x 
-     * @param {number} y
-     * @param {SVGElement} parent
-     */
-    constructor(x, y, parent) {
-        super('g', parent);
-        const [rect, bar, text, path] = createSvgElements('rect', 'line', 'text', 'path');
-
-        setAttributes(rect, {'class': 'circuit-gate'});
-        setAttributes(text, {'class': 'circuit-gate-text circuit-gate-reset'});
-
-        text.textContent = "∣0⟩";
-
-        this.domNode.style.transform = `translate(${x}px, ${y}px)`;
-        appendChildren(this.domNode, [rect, text]);
     }
 }
 
@@ -187,7 +173,7 @@ function renderCircuit() {
     // Draw the circuit lines
     for (let i = 1; i < 5; i++) {
         new CircuitLine(75, i * 75, 650, canvas);
-        new CircuitReset(75, i * 75, canvas);
+        new CircuitGate("∣0⟩", 75, i * 75, canvas);
         new CircuitMz(725, i * 75, canvas);
     }
 
