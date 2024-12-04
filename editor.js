@@ -180,10 +180,10 @@ class CircuitGate extends CircuitDraggable {
 
         if (name[0] === 'R') {
             // Rotation gate - needs a subscript
-            text.innerHTML = `R<tspan dy="5" class="circuit-script">${name[1]}</tspan>`;
+            text.innerHTML = `<tspan class='circuit-gate-text'>R</tspan><tspan dy="5" class="circuit-script">${name[1]}</tspan>`;
         } else if (name[1] === '†') {
             // Adjoint gate - needs a superscript
-            text.innerHTML = `<tspan dx="3">${name[0]}</tspan><tspan dx="3" dy="-6" class="circuit-script">${name[1]}</tspan>`;
+            text.innerHTML = `<tspan class='circuit-gate-text' dx="3">${name[0]}</tspan><tspan dx="3" dy="-6" class="circuit-script">${name[1]}</tspan>`;
         } else if (name[1] === '0') {
             // Reset gate - needs a non-italic style for the ket
             text.textContent = name;
