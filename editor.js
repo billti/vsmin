@@ -44,7 +44,7 @@ setAttributes(circuitBackground, {'width': '780', 'height': '500', 'x': '10', 'y
 setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-hover-background'});
 appendChildren(canvas, [circuitBackground, hoverBackground]);
 
-canvas.addEventListener('mousemove', (/** @type {MouseEvent} */ ev) => {
+function onDragging(/** @type {MouseEvent} */ ev) {
     const svgPoint = canvas.createSVGPoint();
     svgPoint.x = ev.clientX;
     svgPoint.y = ev.clientY;
@@ -61,7 +61,7 @@ canvas.addEventListener('mousemove', (/** @type {MouseEvent} */ ev) => {
         }
     }
     hoverBackground.style.display = 'none';
-});
+};
 canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
 document.body.appendChild(canvas);
@@ -96,7 +96,69 @@ class CircuitLine extends CircuitElement {
     }
 }
 
-class CircuitGate extends CircuitElement {
+class CircuitDraggable extends CircuitElement {
+    /**
+     * @param {number} x 
+     * @param {number} y
+     * @param {SVGElement} parent
+     */
+    constructor(x, y, parent) {
+        super('g', parent);
+        this.x = x;
+        this.y = y;
+        this.setPosition(x, y);
+    }
+
+    /**
+     * @param {number} x 
+     * @param {number} y 
+     */
+    setPosition(x, y) {
+        this.x = x;
+        this.y = y;
+        this.domNode.style.transform = `translate(${x}px, ${y}px)`;
+    }
+
+    /**
+     * @param {SVGElement} node 
+     */
+    setDraggableNode(node) {
+        node.style.cursor = 'grab';
+        node.addEventListener('mousedown', (/** @type {MouseEvent} */ ev) => {
+            // Register for mousemove events until a mouseup event
+            const startX = this.x;
+            const startY = this.y;
+            // Convert the mouse location to SVG coordinates
+            const svgPoint = canvas.createSVGPoint();
+            svgPoint.x = ev.clientX;
+            svgPoint.y = ev.clientY;
+            const point = svgPoint.matrixTransform(canvas.getScreenCTM()?.inverse());
+            const xDelta = point.x - this.x;
+            const yDelta = point.y - this.y;
+
+            const mouseMoveHandler = (/** @type {MouseEvent} */ ev) => {
+                const svgPoint = canvas.createSVGPoint();
+                svgPoint.x = ev.clientX;
+                svgPoint.y = ev.clientY;
+                const point = svgPoint.matrixTransform(canvas.getScreenCTM()?.inverse());
+
+                this.setPosition(point.x - xDelta, point.y - yDelta);
+                onDragging(ev);
+            };
+            const mouseUpHandler = () => {
+                window.removeEventListener('mousemove', mouseMoveHandler);
+                window.removeEventListener('mouseup', mouseUpHandler);
+                hoverBackground.style.display = 'none';
+                // TODO: Snap to drop location (if valid) and re-render the circuit
+            };
+            // TODO: Cancellation or invalid drop location
+            window.addEventListener('mousemove', mouseMoveHandler);
+            window.addEventListener('mouseup', mouseUpHandler);
+        });
+    }
+}
+
+class CircuitGate extends CircuitDraggable {
     /**
      * @param {string} name
      * @param {number} x 
@@ -104,7 +166,7 @@ class CircuitGate extends CircuitElement {
      * @param {SVGElement} parent
      */
     constructor(name, x, y, parent) {
-        super('g', parent);
+        super(x, y, parent);
         const [rect, text] = createSvgElements('rect', 'text');
         rect.classList.value = 'circuit-gate';
         text.classList.value = 'circuit-gate-text';
@@ -124,11 +186,11 @@ class CircuitGate extends CircuitElement {
         }
 
         appendChildren(this.domNode, [rect, text]);
-        this.domNode.style.transform = `translate(${x}px, ${y}px)`;
+        this.setDraggableNode(rect);
     }
 }
 
-class CircuitCXGate extends CircuitElement {
+class CircuitCXGate extends CircuitDraggable {
         /**
      * @param {number} x 
      * @param {number} y
@@ -136,35 +198,36 @@ class CircuitCXGate extends CircuitElement {
      * @param {SVGElement} parent
      */
         constructor(x, y, controlYDelta, parent) {
-            super('g', parent);
+            super(x, y, parent);
             const [link, cross, control, target] = createSvgElements('line', 'line', 'circle', 'circle');
 
             const extra = controlYDelta < y ? 16 : -16;
 
-            setAttributes(link, {'x1': `${x}`, 'y1': `${y + controlYDelta}`, 'x2': `${x}`, 'y2': `${y + extra}`, 'class': 'circuit-cx-lines'});
-            setAttributes(cross, {'x1': `${x - 16}`, 'y1': `${y}`, 'x2': `${x + 16}`, 'y2': `${y}`, 'class': 'circuit-cx-lines'});
-            setAttributes(control, {'cx': `${x}`, 'cy': `${y + controlYDelta}`, 'r': '6', 'class': 'circuit-cx-lines'});
-            setAttributes(target, {'cx': `${x}`, 'cy': `${y}`, 'r': '16', 'class': 'circuit-cx-lines circuit-cx-target'});
+            setAttributes(link, {'x1': `0`, 'y1': `${controlYDelta}`, 'x2': `0`, 'y2': `${extra}`, 'class': 'circuit-cx-lines'});
+            setAttributes(cross, {'x1': `${-16}`, 'y1': `0`, 'x2': `${16}`, 'y2': `0`, 'class': 'circuit-cx-lines'});
+            setAttributes(control, {'cx': `0`, 'cy': `${controlYDelta}`, 'r': '6', 'class': 'circuit-cx-lines'});
+            setAttributes(target, {'cx': `0`, 'cy': `0`, 'r': '16', 'class': 'circuit-cx-lines circuit-cx-target'});
 
             appendChildren(this.domNode, [link, cross, control, target]);
+            this.setDraggableNode(target);
+            // TODO: Dragging the control to a qubit line
         }
 }
 
-class CircuitMz extends CircuitElement {
+class CircuitMz extends CircuitDraggable {
     /**
      * @param {number} x 
      * @param {number} y
      * @param {SVGElement} parent
      */
     constructor(x, y, parent) {
-        super('g', parent);
+        super(x, y, parent);
         const [rect, bar, path] = createSvgElements('rect', 'path', 'path');
 
         setAttributes(rect, {'class': 'circuit-gate'});
         setAttributes(bar, {'d': 'M 0 8 l 12 -17', 'class': 'circuit-measure-angle'});
         setAttributes(path, {'d': 'M -15 3 A 30 35 0 0 1 15 3', 'class': 'circuit-measure-angle'});
 
-        this.domNode.style.transform = `translate(${x}px, ${y}px)`;
         appendChildren(this.domNode, [rect, bar, path]);
     }
 }

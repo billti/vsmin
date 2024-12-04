@@ -55,6 +55,7 @@ body {
     font-family: "KaTeX_Math";
     font-size: 1.3em;
     user-select: none;
+    pointer-events: none;
     transform: translate(-1px, 1px);
 }
 
