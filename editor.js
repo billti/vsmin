@@ -102,14 +102,12 @@ class CircuitReset extends CircuitElement {
         const [rect, bar, text, path] = createSvgElements('rect', 'line', 'text', 'path');
 
         setAttributes(rect, {'class': 'circuit-gate'});
-        setAttributes(text, {'class': 'circuit-gate-text'});
-        setAttributes(bar, {'y2': `${10}`, 'class': 'circuit-reset-bar'});
-        setAttributes(path, {'d': 'M 0 0 l 2 5 l -2 5', 'class': 'circuit-reset-angle'});
+        setAttributes(text, {'class': 'circuit-gate-text circuit-gate-reset'});
 
-        text.textContent = "0";
+        text.textContent = "∣0⟩";
 
         this.domNode.style.transform = `translate(${x}px, ${y}px)`;
-        appendChildren(this.domNode, [rect, bar, path, text]);
+        appendChildren(this.domNode, [rect, text]);
     }
 }
 
