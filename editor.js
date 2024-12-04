@@ -1,47 +1,51 @@
 // @ts-check
 
-/* TODO:
-- Add a toolbar of gates
-- Add support for drag and drop of gates across lines
-- Add support for dragging a gate from a toolbar area to a line
-*/
-
 // @ts-ignore
 const vscode = acquireVsCodeApi();
 
-/**
- * 
- * @param  {...string} tags 
- * @returns {SVGElement[]}
- */
-function createSvgElements(...tags) {
+// **** Metrics for controlling the layout ****
+
+let svgWidth = 800;
+let svgHeight = 600;
+let circuitHeight = 500;
+const circuitPadding = 10;
+const qubitLinePadding = 75;
+const qubitOffsetTop = 75;
+const qubitSpacing = 75;
+const gateSpacing = 75;
+const gateWidth = 40; // Ensure this and below matches the CSS values
+const gateHeight = 40;
+const cxTargetRadius = 16;
+const cxControlRadius = 6;
+
+
+// **** Helper functions for rendering SVG elements ****
+
+/** @typedef {Record<string, string>} StringMap */
+
+const createSvgElements = (/** @type {string[]}] */ ...tags) => {
     return tags.map(tag => document.createElementNS('http://www.w3.org/2000/svg', tag));
 }
 
-/** 
- * @param {SVGElement} el
- * @param {Record<string, string>} attrs
- */
-function setAttributes(el, attrs) {
-    for (const key in attrs) {
-        el.setAttribute(key, attrs[key]);
-    }
+const setAttributes = (/** @type {SVGElement} */ el, /** @type {StringMap} */ attrs) => {
+    for (const key in attrs) el.setAttribute(key, attrs[key]);
 }
 
-/**
- * @param {Element} parent 
- * @param {Element[]} children 
- */
-function appendChildren(parent, children) {
+const appendChildren = (/** @type {Element} */ parent, /** @type {Element[]} */ children) => {
     children.forEach(child => parent.appendChild(child));
 }
 
+const getGateX = (/** @type {number} */ gateIndex) => circuitPadding + qubitLinePadding  + gateIndex * gateSpacing;
+const getGateXMax = () => svgWidth - circuitPadding - qubitLinePadding;
+const getQubitY = (/** @type {number} */ qubitIndex) => qubitOffsetTop + qubitIndex * qubitSpacing;
+
+
 const canvas = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-setAttributes(canvas, {'width': '800', 'height': '600'});
+setAttributes(canvas, {'width': `${svgWidth}`, 'height': `${svgHeight}`});
 
 const [circuitBackground, hoverBackground] = createSvgElements('rect', 'rect');
-setAttributes(circuitBackground, {'width': '780', 'height': '500', 'x': '10', 'y': '10', 'class': 'circuit-background'});
-setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-hover-background'});
+setAttributes(circuitBackground, {'width': `${svgWidth - circuitPadding}`, 'height': `${circuitHeight}`, 'x': `${circuitPadding}`, 'y': `${circuitPadding}`, 'class': 'circuit-background'});
+setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-droparea-background'});
 appendChildren(canvas, [circuitBackground, hoverBackground]);
 
 function onDragging(/** @type {MouseEvent} */ ev) {
@@ -65,6 +69,9 @@ function onDragging(/** @type {MouseEvent} */ ev) {
 canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
 document.body.appendChild(canvas);
+
+
+// **** Classes for rendering the circuit elements ****
 
 class CircuitElement {
     /**
@@ -172,13 +179,13 @@ class CircuitGate extends CircuitDraggable {
         text.classList.value = 'circuit-gate-text';
 
         if (name[0] === 'R') {
-            // Rotation gate
+            // Rotation gate - needs a subscript
             text.innerHTML = `R<tspan dy="5" class="circuit-script">${name[1]}</tspan>`;
         } else if (name[1] === '†') {
-            // Adjoint gate
+            // Adjoint gate - needs a superscript
             text.innerHTML = `<tspan dx="3">${name[0]}</tspan><tspan dx="3" dy="-6" class="circuit-script">${name[1]}</tspan>`;
         } else if (name[1] === '0') {
-            // Reset gate
+            // Reset gate - needs a non-italic style for the ket
             text.textContent = name;
             setAttributes(text, {'class': 'circuit-gate-text circuit-gate-reset'});
         } else {
@@ -201,12 +208,12 @@ class CircuitCXGate extends CircuitDraggable {
             super(x, y, parent);
             const [link, cross, control, target] = createSvgElements('line', 'line', 'circle', 'circle');
 
-            const extra = controlYDelta < y ? 16 : -16;
+            const extra = controlYDelta < y ? cxTargetRadius : -cxTargetRadius;
 
             setAttributes(link, {'x1': `0`, 'y1': `${controlYDelta}`, 'x2': `0`, 'y2': `${extra}`, 'class': 'circuit-cx-lines'});
-            setAttributes(cross, {'x1': `${-16}`, 'y1': `0`, 'x2': `${16}`, 'y2': `0`, 'class': 'circuit-cx-lines'});
-            setAttributes(control, {'cx': `0`, 'cy': `${controlYDelta}`, 'r': '6', 'class': 'circuit-cx-lines'});
-            setAttributes(target, {'cx': `0`, 'cy': `0`, 'r': '16', 'class': 'circuit-cx-lines circuit-cx-target'});
+            setAttributes(cross, {'x1': `${-cxTargetRadius}`, 'y1': `0`, 'x2': `${cxTargetRadius}`, 'y2': `0`, 'class': 'circuit-cx-lines'});
+            setAttributes(control, {'cx': `0`, 'cy': `${controlYDelta}`, 'r': `${cxControlRadius}`, 'class': 'circuit-cx-lines'});
+            setAttributes(target, {'cx': `0`, 'cy': `0`, 'r': `${cxTargetRadius}`, 'class': 'circuit-cx-lines circuit-cx-target'});
 
             appendChildren(this.domNode, [link, cross, control, target]);
             this.setDraggableNode(target);
@@ -232,28 +239,63 @@ class CircuitMz extends CircuitDraggable {
     }
 }
 
+const gateList = [
+    {gate: 'H',  step: 1, qubits: [0]},
+    {gate: 'CX', step: 2, qubits: [1, 0]},
+    {gate: 'T†', step: 3, qubits: [1]},
+    {gate: 'CX', step: 4, qubits: [2, 1]},
+    {gate: 'RZ', step: 5, qubits: [1]},
+    {gate: 'CX', step: 6, qubits: [3, 0]},
+];
+
 function renderCircuit() {
+    const qubitLineXStart = getGateX(0);
+    const qubitLineXEnd = getGateXMax();
+    const qubitLineWidth = qubitLineXEnd - qubitLineXStart;
+
     // Draw the circuit lines
-    for (let i = 1; i < 5; i++) {
-        new CircuitLine(75, i * 75, 650, canvas);
-        new CircuitGate("∣0⟩", 75, i * 75, canvas);
-        new CircuitMz(725, i * 75, canvas);
+    for (let i = 0; i < 4; i++) {
+        const yOffset = getQubitY(i);
+        new CircuitLine(qubitLineXStart, yOffset, qubitLineWidth, canvas);
+        new CircuitGate("∣0⟩", qubitLineXStart, yOffset, canvas);
+        new CircuitMz(qubitLineXEnd, yOffset, canvas);
     }
 
-    new CircuitGate('H', 150, 75, canvas);
-    new CircuitCXGate(225, 150, -75, canvas);
-    new CircuitGate('T†', 300, 150, canvas);
-    new CircuitCXGate(375, 225, -75, canvas);
-    new CircuitGate('RZ', 450, 150, canvas);
-    new CircuitCXGate(525, 300, -75, canvas);
+    // Draw the gates
+    gateList.forEach(gate => {
+        const x = getGateX(gate.step);
+        const y = getQubitY(gate.qubits[0]);
+        if (gate.gate === 'CX') {
+            const controlYOffset = getQubitY(gate.qubits[1]) - y;
+            new CircuitCXGate(x, y, controlYOffset, canvas);
+        } else {
+            new CircuitGate(gate.gate, x, y, canvas);
+        }
+    });
 }
 
-window.onload = renderCircuit;
+
+// **** Communicating with the host extension ****
 
 window.addEventListener('message', event => {
     const message = event.data;
     if (message.type === 'update') {
-        const textArea = /** @type {HTMLTextAreaElement} */ (document.getElementById('output'));
-        textArea.value = message.value;
+        // TODO: Update the circuit based on the message.data
     }
 });
+
+
+window.onload = renderCircuit;
+
+/*
+TODO
+- Clean up the init code
+- Fix drop-zones to be layout aware
+- Make dropping snap gates to correct location
+- Disable dropping in invalid locations
+- Enable drag & drop for controls
+- Add a toolbar of gates to drop
+- Enable dropping new gates from the toolbar
+- Update the gate list state based on gate edits
+- Add if/else blocks
+*/
