@@ -37,7 +37,32 @@ function appendChildren(parent, children) {
 }
 
 const canvas = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-setAttributes(canvas, {'width': '800', 'height': '600', 'class': 'circuit'});
+setAttributes(canvas, {'width': '800', 'height': '600'});
+
+const [circuitBackground, hoverBackground] = createSvgElements('rect', 'rect');
+setAttributes(circuitBackground, {'width': '780', 'height': '500', 'x': '10', 'y': '10', 'class': 'circuit-background'});
+setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-hover-background'});
+appendChildren(canvas, [circuitBackground, hoverBackground]);
+
+canvas.addEventListener('mousemove', (/** @type {MouseEvent} */ ev) => {
+    const svgPoint = canvas.createSVGPoint();
+    svgPoint.x = ev.clientX;
+    svgPoint.y = ev.clientY;
+    const point = svgPoint.matrixTransform(canvas.getScreenCTM()?.inverse());
+    if (point.x < 90 || point.x > 735 || point.y < 45 || point.y > 325) {
+        hoverBackground.style.display = 'none';
+        return;
+    }
+    for(let i = 90; i < 615; i+= 75) {
+        if (point.x > i && point.x < i + 75) {
+            hoverBackground.setAttribute('x', `${i}`);
+            hoverBackground.style.display = 'inline';
+            return;
+        }
+    }
+    hoverBackground.style.display = 'none';
+});
+canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
 document.body.appendChild(canvas);
 
@@ -83,7 +108,13 @@ class CircuitGate extends CircuitElement {
         const [rect, text] = createSvgElements('rect', 'text');
         rect.classList.value = 'circuit-gate';
 
-        text.textContent = name;
+        if (name[0] === 'R') {
+            text.innerHTML = `R<tspan dy="5" class="circuit-script">${name[1]}</tspan>`;
+        } else if (name[1] === '†') {
+            text.innerHTML = `<tspan dx="3">${name[0]}</tspan><tspan dx="3" dy="-6" class="circuit-script">${name[1]}</tspan>`;
+        } else {
+            text.textContent = name;
+        }
         text.classList.value = 'circuit-gate-text';
 
         appendChildren(this.domNode, [rect, text]);
@@ -162,9 +193,9 @@ function renderCircuit() {
 
     new CircuitGate('H', 150, 75, canvas);
     new CircuitCXGate(225, 150, -75, canvas);
-    new CircuitGate('Z', 300, 150, canvas);
+    new CircuitGate('T†', 300, 150, canvas);
     new CircuitCXGate(375, 225, -75, canvas);
-    new CircuitGate('Z', 450, 150, canvas);
+    new CircuitGate('RZ', 450, 150, canvas);
     new CircuitCXGate(525, 300, -75, canvas);
 }
 
