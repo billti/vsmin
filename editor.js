@@ -135,6 +135,10 @@ class CircuitDraggable extends CircuitElement {
             const canvas = this.domNode.ownerSVGElement;
             if (!canvas) return;
 
+            // Make it the top-most element when dragging
+            // TODO: Make the drop zone outline just below this.
+            canvas.appendChild(this.domNode);
+
             // Register for mousemove events until a mouseup event
             const startX = this.x;
             const startY = this.y;
@@ -218,7 +222,7 @@ class CircuitCXGate extends CircuitDraggable {
             setAttributes(control, {'cx': `0`, 'cy': `${controlYDelta}`, 'r': `${cxControlRadius}`, 'class': 'circuit-cx-lines'});
             setAttributes(target, {'cx': `0`, 'cy': `0`, 'r': `${cxTargetRadius}`, 'class': 'circuit-cx-lines circuit-cx-target'});
 
-            appendChildren(this.domNode, [link, cross, control, target]);
+            appendChildren(this.domNode, [target, link, cross, control]);
             this.setDraggableNode(target);
             // TODO: Dragging the control to a qubit line
         }

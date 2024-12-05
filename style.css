@@ -96,10 +96,12 @@ body {
     stroke: var(--circuit-control-line-stroke-color);
     fill: var(--circuit-control-line-stroke-color);
     stroke-width: var(--circuit-control-line-stroke-width);
+    pointer-events: none;
 }
 
 .circuit-cx-target {
-    fill: transparent; /* so that the mouse still interacts when within the circle radius */
+    fill: var(--circuit-fill);
+    pointer-events: auto;
 }
 
 .circuit-measure-angle {
