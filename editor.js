@@ -35,6 +35,16 @@ const appendChildren = (/** @type {Element} */ parent, /** @type {Element[]} */ 
     children.forEach(child => parent.appendChild(child));
 }
 
+const spansRange = (/** @type {number[]} */ arr) => {
+    if (arr.length === 0) throw new Error('Empty array');
+    const result = {min: arr[0], max: arr[0]};
+    arr.forEach(v => {
+        if (v < result.min) result.min = v;
+        if (v > result.max) result.max = v;
+    });
+    return result;
+};
+
 const getGateX = (/** @type {number} */ gateIndex) => circuitPadding + qubitLinePadding  + gateIndex * gateSpacing;
 const getGateXMax = () => svgWidth - circuitPadding - qubitLinePadding;
 const getQubitY = (/** @type {number} */ qubitIndex) => qubitOffsetTop + qubitIndex * qubitSpacing;
@@ -237,11 +247,11 @@ class CircuitMz extends CircuitDraggable {
 /** @type {GateEntry[]} */
 const gateList = [
     {gate: 'H',  step: 1, qubits: [0]},
-    {gate: 'CX', step: 2, qubits: [1, 0]},
-    {gate: 'T†', step: 3, qubits: [1]},
-    {gate: 'CX', step: 4, qubits: [2, 1]},
-    {gate: 'RZ', step: 5, qubits: [1]},
-    {gate: 'CX', step: 6, qubits: [3, 0]},
+    {gate: 'CX', step: 1, qubits: [1, 0]},
+    {gate: 'T†', step: 1, qubits: [1]},
+    {gate: 'CX', step: 1, qubits: [2, 1]},
+    {gate: 'RZ', step: 1, qubits: [1]},
+    {gate: 'CX', step: 1, qubits: [3, 0]},
 ];
 
 class CircuitDesigner {
@@ -273,6 +283,7 @@ class CircuitDesigner {
         }
     
         // Draw the gates
+        this.shuffleGates();
         this.gateList.forEach(gate => {
             const x = getGateX(gate.step);
             const y = getQubitY(gate.qubits[0]);
@@ -282,6 +293,24 @@ class CircuitDesigner {
             } else {
                 new CircuitGate(gate.gate, x, y, this.canvas);
             }
+        });
+    }
+
+    shuffleGates() {
+        // Go through gate list first to last and figure out what step to put it in
+        // If there is a gate in that step, move it to the next. It will never go back a step.
+        let step = 1;
+        /** @type {number[]} */
+        let takenSlots = [];
+        this.gateList.forEach(gate => {
+            const span = spansRange(gate.qubits);
+            const taken = takenSlots.some(slot => slot >= span.min && slot <= span.max);
+            if (taken) {
+                step++;
+                takenSlots = [];
+            }
+            gate.step = step;
+            for(let i = span.min; i <= span.max; i++) takenSlots.push(i);
         });
     }
 }
