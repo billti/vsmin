@@ -26,12 +26,13 @@
     --circuit-fill: #141414;
     --circuit-shadow: #646464;
     --circuit-droparea-fill: #332222;
-    --circuit-qubit-line: #f0f0f0;
+    --circuit-qubit-line: #909090;
     --circuit-qubit-width: 2px;
     --circuit-gate-fill: #000000;
     --circuit-gate-stroke: #ffffff;
     --circuit-gate-stroke-width: 1px;
     --circuit-control-line-stroke-width: 2px;
+    --circuit-control-line-stroke-color: #e0e0e0;
     --circuit-gate-width: 40px;
     --circuit-gate-height: 40px;
 }
@@ -88,11 +89,12 @@ body {
 
 .circuit-gate-reset {
     font-family: var(--circuit-font);
+    font-style: normal;
 }
 
 .circuit-cx-lines {
-    stroke: var(--circuit-gate-stroke);
-    fill: var(--circuit-gate-stroke);
+    stroke: var(--circuit-control-line-stroke-color);
+    fill: var(--circuit-control-line-stroke-color);
     stroke-width: var(--circuit-control-line-stroke-width);
 }
 

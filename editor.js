@@ -40,32 +40,25 @@ const getGateXMax = () => svgWidth - circuitPadding - qubitLinePadding;
 const getQubitY = (/** @type {number} */ qubitIndex) => qubitOffsetTop + qubitIndex * qubitSpacing;
 
 
-const canvas = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-setAttributes(canvas, {'width': `${svgWidth}`, 'height': `${svgHeight}`});
 
-const [circuitBackground, hoverBackground] = createSvgElements('rect', 'rect');
-setAttributes(circuitBackground, {'width': `${svgWidth - circuitPadding}`, 'height': `${circuitHeight}`, 'x': `${circuitPadding}`, 'y': `${circuitPadding}`, 'class': 'circuit-background'});
-setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-droparea-background'});
-appendChildren(canvas, [circuitBackground, hoverBackground]);
+// function onDragging(/** @type {MouseEvent} */ ev) {
+//     const point = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(canvas.getScreenCTM()?.inverse());
+//     if (point.x < 90 || point.x > 735 || point.y < 45 || point.y > 325) {
+//         hoverBackground.style.display = 'none';
+//         return;
+//     }
+//     for(let i = 90; i < 615; i+= 75) {
+//         if (point.x > i && point.x < i + 75) {
+//             hoverBackground.setAttribute('x', `${i}`);
+//             hoverBackground.style.display = 'inline';
+//             return;
+//         }
+//     }
+//     hoverBackground.style.display = 'none';
+// };
+// canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
-function onDragging(/** @type {MouseEvent} */ ev) {
-    const point = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(canvas.getScreenCTM()?.inverse());
-    if (point.x < 90 || point.x > 735 || point.y < 45 || point.y > 325) {
-        hoverBackground.style.display = 'none';
-        return;
-    }
-    for(let i = 90; i < 615; i+= 75) {
-        if (point.x > i && point.x < i + 75) {
-            hoverBackground.setAttribute('x', `${i}`);
-            hoverBackground.style.display = 'inline';
-            return;
-        }
-    }
-    hoverBackground.style.display = 'none';
-};
-canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
-document.body.appendChild(canvas);
 
 
 // **** Classes for rendering the circuit elements ****
@@ -129,6 +122,9 @@ class CircuitDraggable extends CircuitElement {
     setDraggableNode(node) {
         node.style.cursor = 'grab';
         node.addEventListener('mousedown', (/** @type {MouseEvent} */ ev) => {
+            const canvas = this.domNode.ownerSVGElement;
+            if (!canvas) return;
+
             // Register for mousemove events until a mouseup event
             const startX = this.x;
             const startY = this.y;
@@ -147,12 +143,12 @@ class CircuitDraggable extends CircuitElement {
                 const point = svgPoint.matrixTransform(canvas.getScreenCTM()?.inverse());
 
                 this.setPosition(point.x - xDelta, point.y - yDelta);
-                onDragging(ev);
+                // onDragging(ev);
             };
             const mouseUpHandler = () => {
                 window.removeEventListener('mousemove', mouseMoveHandler);
                 window.removeEventListener('mouseup', mouseUpHandler);
-                hoverBackground.style.display = 'none';
+                // hoverBackground.style.display = 'none';
                 // TODO: Snap to drop location (if valid) and re-render the circuit
             };
             // TODO: Cancellation or invalid drop location
@@ -236,6 +232,9 @@ class CircuitMz extends CircuitDraggable {
     }
 }
 
+/** @typedef {{gate: string; step: number; qubits: number[]}} GateEntry */
+
+/** @type {GateEntry[]} */
 const gateList = [
     {gate: 'H',  step: 1, qubits: [0]},
     {gate: 'CX', step: 2, qubits: [1, 0]},
@@ -245,31 +244,51 @@ const gateList = [
     {gate: 'CX', step: 6, qubits: [3, 0]},
 ];
 
-function renderCircuit() {
-    const qubitLineXStart = getGateX(0);
-    const qubitLineXEnd = getGateXMax();
-    const qubitLineWidth = qubitLineXEnd - qubitLineXStart;
+class CircuitDesigner {
+    constructor(/** @type{HTMLElement} */ parent, /** @type{GateEntry[]} */ gates) {
+        this.canvas = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        setAttributes(this.canvas, {'width': `${svgWidth}`, 'height': `${svgHeight}`});
+        
+        const [circuitBackground, hoverBackground] = createSvgElements('rect', 'rect');
+        setAttributes(circuitBackground, {'width': `${svgWidth - circuitPadding * 2}`, 'height': `${circuitHeight}`, 'x': `${circuitPadding}`, 'y': `${circuitPadding}`, 'class': 'circuit-background'});
+        setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-droparea-background'});
+        appendChildren(this.canvas, [circuitBackground, hoverBackground]);
 
-    // Draw the circuit lines
-    for (let i = 0; i < 4; i++) {
-        const yOffset = getQubitY(i);
-        new CircuitLine(qubitLineXStart, yOffset, qubitLineWidth, canvas);
-        new CircuitGate("∣0⟩", qubitLineXStart, yOffset, canvas);
-        new CircuitMz(qubitLineXEnd, yOffset, canvas);
+        parent.appendChild(this.canvas);
+        this.gateList = gates;
+        this.renderCircuit();
     }
 
-    // Draw the gates
-    gateList.forEach(gate => {
-        const x = getGateX(gate.step);
-        const y = getQubitY(gate.qubits[0]);
-        if (gate.gate === 'CX') {
-            const controlYOffset = getQubitY(gate.qubits[1]) - y;
-            new CircuitCXGate(x, y, controlYOffset, canvas);
-        } else {
-            new CircuitGate(gate.gate, x, y, canvas);
+    renderCircuit() {
+        const qubitLineXStart = getGateX(0);
+        const qubitLineXEnd = getGateXMax();
+        const qubitLineWidth = qubitLineXEnd - qubitLineXStart;
+    
+        // Draw the circuit lines
+        for (let i = 0; i < 4; i++) {
+            const yOffset = getQubitY(i);
+            new CircuitLine(qubitLineXStart, yOffset, qubitLineWidth, this.canvas);
+            new CircuitGate("∣0⟩", qubitLineXStart, yOffset, this.canvas);
+            new CircuitMz(qubitLineXEnd, yOffset, this.canvas);
         }
-    });
+    
+        // Draw the gates
+        this.gateList.forEach(gate => {
+            const x = getGateX(gate.step);
+            const y = getQubitY(gate.qubits[0]);
+            if (gate.gate === 'CX') {
+                const controlYOffset = getQubitY(gate.qubits[1]) - y;
+                new CircuitCXGate(x, y, controlYOffset, this.canvas);
+            } else {
+                new CircuitGate(gate.gate, x, y, this.canvas);
+            }
+        });
+    }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const designer = new CircuitDesigner(document.body, gateList);
+});
 
 
 // **** Communicating with the host extension ****
@@ -281,12 +300,8 @@ window.addEventListener('message', event => {
     }
 });
 
-
-window.onload = renderCircuit;
-
 /*
 TODO
-- Clean up the init code
 - Collapse operations to the left where possible
 - Fix drop-zones to be layout aware
 - Make dropping snap gates to correct location
