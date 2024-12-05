@@ -49,10 +49,7 @@ setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': 
 appendChildren(canvas, [circuitBackground, hoverBackground]);
 
 function onDragging(/** @type {MouseEvent} */ ev) {
-    const svgPoint = canvas.createSVGPoint();
-    svgPoint.x = ev.clientX;
-    svgPoint.y = ev.clientY;
-    const point = svgPoint.matrixTransform(canvas.getScreenCTM()?.inverse());
+    const point = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(canvas.getScreenCTM()?.inverse());
     if (point.x < 90 || point.x > 735 || point.y < 45 || point.y > 325) {
         hoverBackground.style.display = 'none';
         return;
@@ -290,6 +287,7 @@ window.onload = renderCircuit;
 /*
 TODO
 - Clean up the init code
+- Collapse operations to the left where possible
 - Fix drop-zones to be layout aware
 - Make dropping snap gates to correct location
 - Disable dropping in invalid locations
@@ -297,5 +295,7 @@ TODO
 - Add a toolbar of gates to drop
 - Enable dropping new gates from the toolbar
 - Update the gate list state based on gate edits
-- Add if/else blocks
+- Add if/else blocks for conditional operations (on simple measurements)
+- Add zoom in/out or drag around with mouse wheel/button
+- Can zoom into an operation (with cool animation?)
 */
