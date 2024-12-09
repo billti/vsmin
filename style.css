@@ -48,12 +48,6 @@ body {
     fill: var(--circuit-fill);
 }
 
-.circuit-droparea-background {
-    display: none;
-    stroke: none;
-    fill: var(--circuit-droparea-fill);
-}
-
 .circuit-hover-display {
     display: inline;
 }
@@ -110,4 +104,12 @@ body {
     stroke: var(--circuit-color);
     fill: none;
     stroke-width: 1px;
+}
+
+.circuit-placeholder {
+    stroke: gray;
+    stroke-width: 2px;
+    stroke-dasharray: 4px 4px;
+    rx: 8px;
+    fill: var(--circuit-fill);
 }

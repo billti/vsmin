@@ -17,6 +17,7 @@ const gateWidth = 40; // Ensure this and below matches the CSS values
 const gateHeight = 40;
 const cxTargetRadius = 16;
 const cxControlRadius = 6;
+const placeholderPadding = 10;
 
 
 // **** Helper functions for rendering SVG elements ****
@@ -48,24 +49,6 @@ const spansRange = (/** @type {number[]} */ arr) => {
 const getGateX = (/** @type {number} */ gateIndex) => circuitPadding + qubitLinePadding  + gateIndex * gateSpacing;
 const getGateXMax = () => svgWidth - circuitPadding - qubitLinePadding;
 const getQubitY = (/** @type {number} */ qubitIndex) => qubitOffsetTop + qubitIndex * qubitSpacing;
-
-
-// function onDragging(/** @type {MouseEvent} */ ev) {
-//     const point = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(canvas.getScreenCTM()?.inverse());
-//     if (point.x < 90 || point.x > 735 || point.y < 45 || point.y > 325) {
-//         hoverBackground.style.display = 'none';
-//         return;
-//     }
-//     for(let i = 90; i < 615; i+= 75) {
-//         if (point.x > i && point.x < i + 75) {
-//             hoverBackground.setAttribute('x', `${i}`);
-//             hoverBackground.style.display = 'inline';
-//             return;
-//         }
-//     }
-//     hoverBackground.style.display = 'none';
-// };
-// canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
 
 // **** Classes for rendering the circuit elements ****
@@ -112,6 +95,7 @@ class CircuitDraggable extends CircuitElement {
         this.x = x;
         this.y = y;
         this.setPosition(x, y);
+        this.isBeingDragged = false;
     }
 
     /**
@@ -125,6 +109,25 @@ class CircuitDraggable extends CircuitElement {
     }
 
     /**
+     * 
+     * @param {number} x 
+     * @param {number} y 
+     */
+    animateTo(x, y) {
+        if (this.x === x && this.y === y) return;
+        this.domNode.animate([
+            {transform: `translate(${this.x}px, ${this.y}px)`},
+            {transform: `translate(${x}px, ${y}px)`}
+        ], {duration: 250, fill: 'forwards', easing: 'ease'})
+            .finished.then(anim => {
+                anim.commitStyles();
+                anim.cancel();
+            });
+        this.x = x;
+        this.y = y;
+    }
+
+    /**
      * @param {SVGElement} node 
      */
     setDraggableNode(node) {
@@ -134,12 +137,8 @@ class CircuitDraggable extends CircuitElement {
             if (!canvas) return;
 
             // Make it the top-most element when dragging
-            // TODO: Make the drop zone outline just below this.
             canvas.appendChild(this.domNode);
 
-            // Register for mousemove events until a mouseup event
-            const startX = this.x;
-            const startY = this.y;
             // Convert the mouse location to SVG coordinates
             const svgPoint = canvas.createSVGPoint();
             svgPoint.x = ev.clientX;
@@ -155,14 +154,15 @@ class CircuitDraggable extends CircuitElement {
                 const point = svgPoint.matrixTransform(canvas.getScreenCTM()?.inverse());
 
                 this.setPosition(point.x - xDelta, point.y - yDelta);
-                // onDragging(ev);
+                this.designer.onDragging(point);
             };
             const mouseUpHandler = () => {
                 window.removeEventListener('mousemove', mouseMoveHandler);
                 window.removeEventListener('mouseup', mouseUpHandler);
-                // hoverBackground.style.display = 'none';
-                // TODO: Snap to drop location (if valid) and re-render the circuit
+                this.designer.onStoppedDragging();
+                this.isBeingDragged = false;
             };
+            this.isBeingDragged = true;
             // TODO: Cancellation or invalid drop location
             window.addEventListener('mousemove', mouseMoveHandler);
             window.addEventListener('mouseup', mouseUpHandler);
@@ -203,7 +203,7 @@ class CircuitGate extends CircuitDraggable {
 }
 
 class CircuitCXGate extends CircuitDraggable {
-        /**
+    /**
      * @param {number} x 
      * @param {number} y
      * @param {number} controlYDelta
@@ -244,30 +244,59 @@ class CircuitMz extends CircuitDraggable {
     }
 }
 
-/** @typedef {{gate: string; step: number; qubits: number[]; el?: CircuitDraggable}} GateEntry */
+class CircuitPlaceholder extends CircuitDraggable {
+    /**
+     * @param {number} x 
+     * @param {number} y
+     * @param {number} span
+     * @param {CircuitDesigner} designer
+     */
+    constructor(x, y, span, designer) {
+        super(x, y, designer);
+        const [outline] = createSvgElements('rect');
+        const height = gateHeight + (span - 1) * qubitSpacing + placeholderPadding * 2;
+        setAttributes(outline, {
+            'x': `-${gateWidth / 2 + placeholderPadding}`, 
+            'y': `-${placeholderPadding + gateHeight / 2}`, 
+            'width': `${gateWidth + 2 * placeholderPadding}`, 
+            'height': `${height}`, 
+            'class': 'circuit-placeholder'});
+        appendChildren(this.domNode, [outline]);
+        this.hide();
+    }
 
-/** @type {GateEntry[]} */
-const gateList = [
-    {gate: 'H',  step: 1, qubits: [0]},
-    {gate: 'CX', step: 1, qubits: [1, 0]},
-    {gate: 'T†', step: 1, qubits: [1]},
-    {gate: 'CX', step: 1, qubits: [2, 1]},
-    {gate: 'RZ', step: 1, qubits: [1]},
-    {gate: 'CX', step: 1, qubits: [3, 0]},
-];
+    hide() {
+        this.hidden = true;
+        this.domNode.style.display = 'none';
+    }
+
+    animateTo(x, y) {
+        if (this.hidden) {
+            this.hidden = false;
+            this.domNode.style.display = 'inline';
+            this.setPosition(x, y);
+        } else {
+            super.animateTo(x, y);
+        }
+    }
+}
+
 
 class CircuitDesigner {
     constructor(/** @type{HTMLElement} */ parent, /** @type{GateEntry[]} */ gates) {
         this.canvas = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         setAttributes(this.canvas, {'width': `${svgWidth}`, 'height': `${svgHeight}`});
         
-        const [circuitBackground, hoverBackground] = createSvgElements('rect', 'rect');
+        const [circuitBackground] = createSvgElements('rect', 'rect');
         setAttributes(circuitBackground, {'width': `${svgWidth - circuitPadding * 2}`, 'height': `${circuitHeight}`, 'x': `${circuitPadding}`, 'y': `${circuitPadding}`, 'class': 'circuit-background'});
-        setAttributes(hoverBackground, {'width': '45', 'height': '285', 'x': '90', 'y': '45', 'class': 'circuit-droparea-background'});
-        appendChildren(this.canvas, [circuitBackground, hoverBackground]);
+        
+        // Create this early to keep it's z-index below any gate being dragged
+        // TODO: Needs to be able to change qubit span
+        this.placeholder = new CircuitPlaceholder(0, 0, 1, this);
+        appendChildren(this.canvas, [circuitBackground, this.placeholder.domNode]);
 
         parent.appendChild(this.canvas);
-        this.gateList = gates;
+        this.gateList = gates || [];
         this.renderCircuit();
     }
 
@@ -284,27 +313,19 @@ class CircuitDesigner {
             new CircuitMz(qubitLineXEnd, yOffset, this);
         }
     
-        // Draw the gates
         this.shuffleGates();
-        this.gateList.forEach(gate => {
-            const x = getGateX(gate.step);
-            const y = getQubitY(gate.qubits[0]);
-            if (gate.gate === 'CX') {
-                const controlYOffset = getQubitY(gate.qubits[1]) - y;
-                gate.el = new CircuitCXGate(x, y, controlYOffset, this);
-            } else {
-                gate.el = new CircuitGate(gate.gate, x, y, this);
-            }
-        });
     }
 
     shuffleGates() {
         // Go through gate list first to last and figure out what step to put it in
         // If there is a gate in that step, move it to the next. It will never go back a step.
         let step = 1;
+
         /** @type {number[]} */
         let takenSlots = [];
+
         this.gateList.forEach(gate => {
+            if (gate.el?.isBeingDragged) return; // The placeholder will reserve its spot
             const span = spansRange(gate.qubits);
             const taken = takenSlots.some(slot => slot >= span.min && slot <= span.max);
             if (taken) {
@@ -313,9 +334,114 @@ class CircuitDesigner {
             }
             gate.step = step;
             for(let i = span.min; i <= span.max; i++) takenSlots.push(i);
+
+            // Add if necessary, else animate to new location
+            const x = getGateX(gate.step);
+            const y = getQubitY(gate.qubits[0]);
+            if (gate.el) {
+                // Move to the new location
+                gate.el.animateTo(x, y);
+            } else {
+                // Add the new gate
+                if (gate.gate === 'CX') {
+                    const controlYOffset = getQubitY(gate.qubits[1]) - y;
+                    gate.el = new CircuitCXGate(x, y, controlYOffset, this);
+                } else if (gate.gate === '=') {
+                    gate.el = new CircuitPlaceholder(x, y, 2, this);
+                } else {
+                    gate.el = new CircuitGate(gate.gate, x, y, this);
+                }
+            }
         });
     }
+
+    /**
+     * @param {DOMPoint} point 
+     */
+    onDragging(point) {
+        // TODO: If not on a drop zone, remove the placeholder
+        // TODO: Handle when dragging off the canvas to delete
+
+        // See if we've over the qubit lines, and if so, show the drop zone
+        if (point.x < getGateX(0) || point.x > getGateXMax()) return;
+
+        // TODO: Num of qubits should be dynamic
+        if (point.y < getQubitY(0) - qubitSpacing / 2 || point.y > getQubitY(3) + qubitSpacing / 2) return;
+
+        const qubitIndex = Math.round((point.y - getQubitY(0)) / qubitSpacing)
+        const qubitLane = Math.round((point.x - getGateX(0) + (gateWidth / 2)) / gateSpacing);
+        this.showPlaceholder(qubitIndex, qubitLane);
+    }
+
+    /**
+     * 
+     * @param {number} qubitIndex 
+     * @param {number} qubitLane 
+     */
+    showPlaceholder(qubitIndex, qubitLane) {
+        let index = this.gateList.findIndex(gate => gate.gate === '=');
+        if (index >= 0) {
+            const entry = this.gateList[index];
+            // If already in the correct spot and visible, do nothing
+            if (entry.step === qubitLane && entry.qubits[0] === qubitIndex && !this.placeholder.hidden ) {
+                return;
+            } else {
+                // It's there, but not in the right place. Remove it and fall through to re-add
+                this.gateList.splice(index, 1);
+            }
+        }
+        // The placeholder should always be the first element in the array for its step
+        const insertIndex = this.gateList.findIndex(gate => gate.step === qubitLane);
+        const newEntry = {gate: '=', step: qubitLane, qubits: [qubitIndex],  el: this.placeholder};
+        if (insertIndex >= 0) {
+            this.gateList.splice(insertIndex, 0, newEntry);
+        } else {
+            this.gateList.push(newEntry);
+        }
+        this.shuffleGates();
+    }
+
+    onStoppedDragging() {
+        // Find the placeholder index
+        const placeHolderIndex = this.gateList.findIndex(gate => gate.gate === '=');
+        if (placeHolderIndex < 0) {
+            // No placeholder, so just remove the dragging and re-render
+            this.gateList.forEach(gate => {if (gate.el?.isBeingDragged) gate.el.isBeingDragged = false});
+            this.shuffleGates();
+            return;
+        };
+
+        // Get the element that was being dragged
+        const draggedIndex = this.gateList.findIndex(gate => gate.el?.isBeingDragged);
+        if (draggedIndex < 0) throw "Stopped dragging without a dragged element";
+
+        // Set the new location for the dragged element
+        this.gateList[draggedIndex].qubits = this.gateList[placeHolderIndex].qubits;
+        this.gateList[draggedIndex].step = this.gateList[placeHolderIndex].step;
+        // @ts-ignore - We already checked that this property is true to find the index
+        this.gateList[draggedIndex].el.isBeingDragged = false;
+
+        // Replace the placeholder with the dragged element
+        this.gateList.splice(placeHolderIndex, 1, this.gateList[draggedIndex]);
+        // Remove the old dragged element
+        this.gateList.splice(draggedIndex, 1);
+
+        this.placeholder.hide();
+        this.shuffleGates();
+    }
 }
+
+/** @typedef {{gate: string; step: number; qubits: number[]; el?: CircuitDraggable}} GateEntry */
+
+/** @type {GateEntry[]} */
+const gateList = [
+    {gate: 'H',  step: 1, qubits: [0]},
+    {gate: 'CX', step: 1, qubits: [1, 0]},
+    {gate: 'T†', step: 1, qubits: [1]},
+    {gate: 'CX', step: 1, qubits: [2, 1]},
+    {gate: 'RZ', step: 1, qubits: [1]},
+    {gate: 'CX', step: 1, qubits: [3, 0]},
+];
 
 document.addEventListener('DOMContentLoaded', () => {
     const designer = new CircuitDesigner(document.body, gateList);
