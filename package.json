@@ -35,5 +35,8 @@
     "license": "MIT",
     "devDependencies": {
         "@types/vscode": "^1.95.0"
+    },
+    "scripts": {
+        "start": "http-server"
     }
 }

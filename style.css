@@ -39,6 +39,8 @@
 
 body {
     font-family: var(--circuit-font);
+    background-color: #1e1e1e;
+    color: white;
 }
 
 .circuit-background {

@@ -1,7 +1,7 @@
 // @ts-check
 
 // @ts-ignore
-const vscode = acquireVsCodeApi();
+const vscode = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : {};
 
 // **** Metrics for controlling the layout ****
 
@@ -50,7 +50,6 @@ const getGateXMax = () => svgWidth - circuitPadding - qubitLinePadding;
 const getQubitY = (/** @type {number} */ qubitIndex) => qubitOffsetTop + qubitIndex * qubitSpacing;
 
 
-
 // function onDragging(/** @type {MouseEvent} */ ev) {
 //     const point = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(canvas.getScreenCTM()?.inverse());
 //     if (point.x < 90 || point.x > 735 || point.y < 45 || point.y > 325) {
@@ -69,18 +68,17 @@ const getQubitY = (/** @type {number} */ qubitIndex) => qubitOffsetTop + qubitIn
 // canvas.addEventListener('mouseleave', () => hoverBackground.style.display = 'none');
 
 
-
-
 // **** Classes for rendering the circuit elements ****
 
 class CircuitElement {
     /**
      * @param {string} tag
-     * @param {SVGElement} parent
+     * @param {CircuitDesigner} designer
      */
-    constructor(tag, parent) {
+    constructor(tag, designer) {
         this.domNode = document.createElementNS('http://www.w3.org/2000/svg', tag);
-        parent.appendChild(this.domNode);
+        designer.canvas.appendChild(this.domNode);
+        this.designer = designer;
     }
 
     remove() {
@@ -93,10 +91,10 @@ class CircuitLine extends CircuitElement {
      * @param {number} x 
      * @param {number} y
      * @param {number} width
-     * @param {SVGElement} parent
+     * @param {CircuitDesigner} designer
      */
-    constructor(x, y, width, parent) {
-        super('line', parent);
+    constructor(x, y, width, designer) {
+        super('line', designer);
         setAttributes(this.domNode, 
             {'x1': `${x}`, 'y1': `${y}`, 'x2': `${x + width}`, 'y2': `${y}`, 'class': 'circuit-line'}
         );
@@ -107,10 +105,10 @@ class CircuitDraggable extends CircuitElement {
     /**
      * @param {number} x 
      * @param {number} y
-     * @param {SVGElement} parent
+     * @param {CircuitDesigner} designer
      */
-    constructor(x, y, parent) {
-        super('g', parent);
+    constructor(x, y, designer) {
+        super('g', designer);
         this.x = x;
         this.y = y;
         this.setPosition(x, y);
@@ -177,10 +175,10 @@ class CircuitGate extends CircuitDraggable {
      * @param {string} name
      * @param {number} x 
      * @param {number} y
-     * @param {SVGElement} parent
+     * @param {CircuitDesigner} designer
      */
-    constructor(name, x, y, parent) {
-        super(x, y, parent);
+    constructor(name, x, y, designer) {
+        super(x, y, designer);
         const [rect, text] = createSvgElements('rect', 'text');
         rect.classList.value = 'circuit-gate';
         text.classList.value = 'circuit-gate-text';
@@ -209,10 +207,10 @@ class CircuitCXGate extends CircuitDraggable {
      * @param {number} x 
      * @param {number} y
      * @param {number} controlYDelta
-     * @param {SVGElement} parent
+     * @param {CircuitDesigner} designer
      */
-        constructor(x, y, controlYDelta, parent) {
-            super(x, y, parent);
+        constructor(x, y, controlYDelta, designer) {
+            super(x, y, designer);
             const [link, cross, control, target] = createSvgElements('line', 'line', 'circle', 'circle');
 
             const extra = controlYDelta < y ? cxTargetRadius : -cxTargetRadius;
@@ -232,10 +230,10 @@ class CircuitMz extends CircuitDraggable {
     /**
      * @param {number} x 
      * @param {number} y
-     * @param {SVGElement} parent
+     * @param {CircuitDesigner} designer
      */
-    constructor(x, y, parent) {
-        super(x, y, parent);
+    constructor(x, y, designer) {
+        super(x, y, designer);
         const [rect, bar, path] = createSvgElements('rect', 'path', 'path');
 
         setAttributes(rect, {'class': 'circuit-gate'});
@@ -246,7 +244,7 @@ class CircuitMz extends CircuitDraggable {
     }
 }
 
-/** @typedef {{gate: string; step: number; qubits: number[]}} GateEntry */
+/** @typedef {{gate: string; step: number; qubits: number[]; el?: CircuitDraggable}} GateEntry */
 
 /** @type {GateEntry[]} */
 const gateList = [
@@ -281,9 +279,9 @@ class CircuitDesigner {
         // Draw the circuit lines
         for (let i = 0; i < 4; i++) {
             const yOffset = getQubitY(i);
-            new CircuitLine(qubitLineXStart, yOffset, qubitLineWidth, this.canvas);
-            new CircuitGate("∣0⟩", qubitLineXStart, yOffset, this.canvas);
-            new CircuitMz(qubitLineXEnd, yOffset, this.canvas);
+            new CircuitLine(qubitLineXStart, yOffset, qubitLineWidth, this);
+            new CircuitGate("∣0⟩", qubitLineXStart, yOffset, this);
+            new CircuitMz(qubitLineXEnd, yOffset, this);
         }
     
         // Draw the gates
@@ -293,9 +291,9 @@ class CircuitDesigner {
             const y = getQubitY(gate.qubits[0]);
             if (gate.gate === 'CX') {
                 const controlYOffset = getQubitY(gate.qubits[1]) - y;
-                new CircuitCXGate(x, y, controlYOffset, this.canvas);
+                gate.el = new CircuitCXGate(x, y, controlYOffset, this);
             } else {
-                new CircuitGate(gate.gate, x, y, this.canvas);
+                gate.el = new CircuitGate(gate.gate, x, y, this);
             }
         });
     }
@@ -334,8 +332,37 @@ window.addEventListener('message', event => {
 });
 
 /*
+Here's how drag & drop works:
+- After the initial render, the gate list has the qubits, steps, and CircuitDraggable elements
+- On mousedown on a gate:
+  - A 'missing' placeholder element is created at the current location
+  - The gateList entry is replaced with the 'missing' entry
+  - The dragged element is moved to the top of the SVG stack
+  - The mousemove and mouseup events are wired up
+- On mousemove:
+  - The dragged SVG element is moved to the new mouse location
+  - The new mouse location is hit-tests against valid dropzones
+  - If the dropzone has changed:
+    - Add/update a dropzone element at the target
+    - Insert/move an entry in gatelist to start of dropzone step
+    - Call updateGates to:
+      - 'shuffle' is called to update the gate steps
+      - 'animate' is called to transform to their new locations (commit animation when completed)
+- On mouseup:
+  - If a dropzone is active:
+    - Replace the dropzone in the gatelist with an entry for the dragged gate
+    - Remove the 'missing' placeholder element
+  else:
+    - Replace the 'missing' placeholder with the dragged gate
+  - Remove the dropzone and 'missing' placeholder (if present)
+  - Do the updateGates/shuffle/animate dance
+  - Remove all mouse event listeners
+- On cancel (if needed?):
+  - Do same as on mouseup 'else' branch (i.e. ignore any valid dropzone, other than removing it)
+*/
+
+/*
 TODO
-- Collapse operations to the left where possible
 - Fix drop-zones to be layout aware
 - Make dropping snap gates to correct location
 - Disable dropping in invalid locations
@@ -346,4 +373,5 @@ TODO
 - Add if/else blocks for conditional operations (on simple measurements)
 - Add zoom in/out or drag around with mouse wheel/button
 - Can zoom into an operation (with cool animation?)
+- Make the initial resets unmovable (and remove final measurements?)
 */
